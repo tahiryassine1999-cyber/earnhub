@@ -1,0 +1,151 @@
+// EarnHub Database Schema
+// Uses SQLite for development, easily switchable to PostgreSQL for production
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  avatar        String?
+  role          String    @default("USER") // USER, ADMIN
+  balance       Float     @default(0)
+  totalEarned   Float     @default(0)
+  referralCode  String    @unique
+  referredBy    String?
+  emailVerified Boolean   @default(false)
+  banned        Boolean   @default(false)
+  lastDailyBonus DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  surveyResponses  SurveyResponse[]
+  offerCompletions OfferCompletion[]
+  transactions     Transaction[]
+  withdrawals      WithdrawalRequest[]
+  referralsMade    Referral[]         @relation("Referrer")
+  referralReceived Referral?          @relation("Referee")
+}
+
+model Survey {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  reward      Float
+  timeMinutes Int
+  category    String
+  questions   String   // JSON string of questions
+  status      String   @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED
+  totalSlots  Int      @default(100)
+  filledSlots Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  responses SurveyResponse[]
+}
+
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  userId    String
+  surveyId  String
+  answers   String   // JSON string of answers
+  earned    Float
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  survey Survey @relation(fields: [surveyId], references: [id])
+
+  @@unique([userId, surveyId])
+}
+
+model Offer {
+  id           String  @id @default(cuid())
+  title        String
+  description  String
+  reward       Float
+  provider     String  // CPX, OFFERTORO, ADGATE, INTERNAL
+  externalId   String?
+  instructions String
+  category     String  // APP_INSTALL, SIGNUP, PURCHASE, VIDEO, GAME
+  url          String
+  iconUrl      String?
+  difficulty   String  @default("EASY") // EASY, MEDIUM, HARD
+  status       String  @default("ACTIVE") // ACTIVE, PAUSED
+  featured     Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  completions OfferCompletion[]
+}
+
+model OfferCompletion {
+  id        String   @id @default(cuid())
+  userId    String
+  offerId   String
+  status    String   @default("PENDING") // PENDING, CREDITED, REJECTED
+  earned    Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id])
+  offer Offer @relation(fields: [offerId], references: [id])
+
+  @@unique([userId, offerId])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // SURVEY_REWARD, OFFER_REWARD, REFERRAL_BONUS, WITHDRAWAL, DAILY_BONUS, ADMIN_ADJUSTMENT
+  amount      Float
+  description String
+  balanceAfter Float
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model WithdrawalRequest {
+  id             String   @id @default(cuid())
+  userId         String
+  amount         Float
+  method         String   // PAYPAL, CRYPTO, GIFTCARD
+  paymentDetails String   // JSON: email, wallet address, etc.
+  status         String   @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED
+  adminNote      String?
+  processedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Referral {
+  id         String   @id @default(cuid())
+  referrerId String
+  refereeId  String   @unique
+  bonus      Float    @default(0)
+  createdAt  DateTime @default(now())
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id])
+  referee  User @relation("Referee", fields: [refereeId], references: [id])
+}
+
+model SiteSettings {
+  id                  String @id @default("settings")
+  siteName            String @default("EarnHub")
+  minWithdrawal       Float  @default(5.00)
+  referralBonus       Float  @default(0.50)
+  dailyBonusAmount    Float  @default(0.05)
+  withdrawalFee       Float  @default(0.00)
+  surveyMarginPercent Float  @default(30.0)
+  offerMarginPercent  Float  @default(25.0)
+}
